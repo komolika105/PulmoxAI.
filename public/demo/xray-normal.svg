@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 480">
+  <rect width="400" height="480" fill="#0B1224"/>
+  <ellipse cx="200" cy="230" rx="150" ry="200" fill="#1A2440" opacity="0.6"/>
+  <path d="M120 90 Q100 230 130 400" stroke="#5B6B94" stroke-width="4" fill="none" opacity="0.5"/>
+  <path d="M280 90 Q300 230 270 400" stroke="#5B6B94" stroke-width="4" fill="none" opacity="0.5"/>
+  <path d="M150 100 Q200 95 250 100" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M148 130 Q200 125 252 130" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M146 160 Q200 155 254 160" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M144 190 Q200 185 256 190" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M142 220 Q200 215 258 220" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M140 250 Q200 245 260 250" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M138 280 Q200 275 262 280" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M136 310 Q200 305 264 310" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <path d="M134 340 Q200 335 266 340" stroke="#3E4A70" stroke-width="3" fill="none" opacity="0.55"/>
+  <rect x="188" y="140" width="24" height="220" rx="10" fill="#2A3454" opacity="0.7"/>
+  
+  <text x="200" y="460" text-anchor="middle" fill="#8A97C2" font-family="monospace" font-size="12" opacity="0.75">Illustrative demo image — not a real patient scan</text>
+</svg>

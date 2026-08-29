@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --color-canvas: #FBFCFE;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F3F6FB;
+  --color-border: #E1E7F0;
+  --color-navy: #0B1730;
+  --color-navy-soft: #45526B;
+  --color-indigo: #3654D6;
+  --color-indigo-deep: #22337F;
+  --color-indigo-mist: #EAEFFC;
+  --color-sky: #DCEBFF;
+  --color-teal: #0E8E7D;
+  --color-amber: #C2760C;
+  --color-rose: #C4324B;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-navy);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+
+@keyframes scanline-sweep {
+  0% { top: -12%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18%;
+  animation: scanline-sweep 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; opacity: 0.5; }
+  html { scroll-behavior: auto; }
+}
+
+::selection { background-color: var(--color-sky); color: var(--color-navy); }
+:focus-visible { outline: 2px solid var(--color-indigo); outline-offset: 2px; }
+
+.grid-backdrop {
+  background-image:
+    linear-gradient(to right, rgba(11, 23, 48, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 23, 48, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 999px; }
