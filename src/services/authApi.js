@@ -6,12 +6,21 @@ import axios from "axios";
 // to consuming components. Replace the LOCAL_MODE block with the axios
 // calls already sketched below once the backend exists.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const LOCAL_MODE = true; // flip to false once /api/auth/* endpoints exist on the backend
-const STORAGE_KEY = "pulmoxai_users";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const LOCAL_MODE = false;
 const SESSION_KEY = "pulmoxai_session";
+const TOKEN_KEY = "pulmoxai_token";
 
 export const client = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
+
+// Attach JWT token to requests if available
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 export class AuthError extends Error {
   constructor(message) {
@@ -20,45 +29,12 @@ export class AuthError extends Error {
   }
 }
 
-function readUsers() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-function writeUsers(users) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-}
-
-function toPublicUser(user) {
-  // eslint-disable-next-line no-unused-vars
-  const { password, ...publicUser } = user;
-  return publicUser;
-}
-
-/**
- * POST /api/auth/signup — real backend contract to implement later:
- * body: { name, email, password } -> { token, user: { id, name, email, createdAt } }
- */
 export const signup = async ({ name, email, password }) => {
-  if (LOCAL_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    const users = readUsers();
-    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-      throw new AuthError("An account with this email already exists.");
-    }
-    const user = { id: crypto.randomUUID(), name, email, password, createdAt: new Date().toISOString() };
-    users.push(user);
-    writeUsers(users);
-    const publicUser = toPublicUser(user);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(publicUser));
-    return publicUser;
-  }
-
   try {
     const response = await client.post("/api/auth/signup", { name, email, password });
+    if (response.data.token) {
+      localStorage.setItem(TOKEN_KEY, response.data.token);
+    }
     localStorage.setItem(SESSION_KEY, JSON.stringify(response.data.user));
     return response.data.user;
   } catch (err) {
@@ -66,22 +42,12 @@ export const signup = async ({ name, email, password }) => {
   }
 };
 
-/**
- * POST /api/auth/login — body: { email, password } -> { token, user }
- */
 export const login = async ({ email, password }) => {
-  if (LOCAL_MODE) {
-    await new Promise((r) => setTimeout(r, 500));
-    const users = readUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!user) throw new AuthError("Incorrect email or password.");
-    const publicUser = toPublicUser(user);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(publicUser));
-    return publicUser;
-  }
-
   try {
     const response = await client.post("/api/auth/login", { email, password });
+    if (response.data.token) {
+      localStorage.setItem(TOKEN_KEY, response.data.token);
+    }
     localStorage.setItem(SESSION_KEY, JSON.stringify(response.data.user));
     return response.data.user;
   } catch (err) {
@@ -91,6 +57,7 @@ export const login = async ({ email, password }) => {
 
 export const logout = async () => {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 };
 
 export const getSession = () => {

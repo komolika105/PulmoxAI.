@@ -2,7 +2,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { classColor, formatPercent } from "../utils/formatters";
 
 export default function ProbabilityChart({ probabilities }) {
-  const data = Object.entries(probabilities)
+  const data = Object.entries(probabilities || {})
     .map(([name, value]) => ({ name, value: value * 100 }))
     .sort((a, b) => b.value - a.value);
 

@@ -6,15 +6,37 @@ import PredictionCard from "../components/PredictionCard";
 import ProbabilityChart from "../components/ProbabilityChart";
 import SegmentationViewer from "../components/SegmentationViewer";
 import ExplainabilityViewer from "../components/ExplainabilityViewer";
+import { usePrediction, STAGES } from "../hooks/usePrediction";
+import ErrorBoundary from "../components/ErrorBoundary";
+import GeminiExplanation from "../components/GeminiExplanation";
 import PerformanceCard from "../components/PerformanceCard";
 import { DemoModeBadge } from "../components/Disclaimer";
-import { usePrediction, STAGES } from "../hooks/usePrediction";
-import { Play } from "lucide-react";
+import { exportReport } from "../services/api";
+import { Play, Download } from "lucide-react";
 
 export default function Analyze() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const { status, stageIndex, result, error, isDemoMode, analyze, reset } = usePrediction();
+
+  const handleExportPdf = async () => {
+    if (!result) return;
+    try {
+      setExportingPdf(true);
+      await exportReport({
+        patient_name: file?.name ? `File: ${file.name}` : "Patient Scan",
+        prediction: result.prediction,
+        confidence: result.confidence,
+        probabilities: result.probabilities,
+        gradcam_image: result.gradcam_image,
+      });
+    } catch (err) {
+      alert("Failed to export PDF report. Please check server logs.");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -95,36 +117,55 @@ export default function Analyze() {
         )}
 
         {status === "done" && result && (
-          <div className="space-y-8">
-            {isDemoMode && (
-              <div className="flex items-center gap-2">
-                <DemoModeBadge />
-                <span className="text-xs" style={{ color: "var(--color-navy-soft)" }}>
-                  Backend unavailable — showing representative demo results.
-                </span>
-              </div>
-            )}
+          <ErrorBoundary onReset={reset}>
+            <div className="space-y-8">
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl p-4 border bg-white" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex items-center gap-2">
+                  {isDemoMode && <DemoModeBadge />}
+                  <span className="text-xs font-medium" style={{ color: "var(--color-navy-soft)" }}>
+                    {isDemoMode ? "Backend unavailable — showing demo mode" : "Live Backend Inference Verified"}
+                  </span>
+                </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <PredictionCard
+                <button
+                  onClick={handleExportPdf}
+                  disabled={exportingPdf}
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-teal, #0d9488)" }}
+                >
+                  <Download size={14} />
+                  {exportingPdf ? "Generating PDF..." : "Export PDF Diagnostic Report"}
+                </button>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <PredictionCard
+                  prediction={result.prediction}
+                  confidence={result.confidence}
+                  uncertainty={result.uncertainty}
+                  calibrationStatus={result.calibration_status}
+                />
+                <ProbabilityChart probabilities={result.probabilities} />
+              </div>
+
+              {/* Gemini AI Clinical Explanation Section */}
+              <GeminiExplanation
                 prediction={result.prediction}
                 confidence={result.confidence}
-                uncertainty={result.uncertainty}
-                calibrationStatus={result.calibration_status}
+                probabilities={result.probabilities}
               />
-              <ProbabilityChart probabilities={result.probabilities} />
+
+              <SegmentationViewer originalImage={result.original_image} segmentationImage={result.segmentation_image} />
+
+              <ExplainabilityViewer
+                gradcamImage={result.gradcam_image}
+                gradcamPlusImage={result.gradcam_plus_image}
+                limeImage={result.lime_image}
+              />
+
+              <PerformanceCard timings={result.timings_ms} totalSeconds={result.inference_time} modelSizeMb={result.model_size_mb} />
             </div>
-
-            <SegmentationViewer originalImage={result.original_image} segmentationImage={result.segmentation_image} />
-
-            <ExplainabilityViewer
-              gradcamImage={result.gradcam_image}
-              gradcamPlusImage={result.gradcam_plus_image}
-              limeImage={result.lime_image}
-            />
-
-            <PerformanceCard timings={result.timings_ms} totalSeconds={result.inference_time} modelSizeMb={result.model_size_mb} />
-          </div>
+          </ErrorBoundary>
         )}
       </div>
 

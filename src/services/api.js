@@ -5,12 +5,20 @@ import { buildMockPrediction } from "./mockData";
 // call axios directly — they go through this service so the mock layer
 // can be swapped for the real FastAPI + PyTorch backend with zero UI changes.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8080";
 const REQUEST_TIMEOUT_MS = 20000;
 
 export const client = axios.create({
   baseURL: API_BASE_URL,
   timeout: REQUEST_TIMEOUT_MS,
+});
+
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem("pulmoxai_token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export class BackendUnavailableError extends Error {
@@ -27,19 +35,6 @@ export class InvalidImageError extends Error {
   }
 }
 
-/**
- * POST /api/predict
- * Sends a chest X-ray image to the backend and returns the structured
- * prediction, explainability artifacts, and performance metrics.
- *
- * Expected response shape (see README / backend contract):
- * {
- *   prediction, confidence, probabilities, classes,
- *   segmentation_image, gradcam_image, gradcam_plus_image, lime_image,
- *   inference_time, timings_ms, model_size_mb,
- *   uncertainty, calibration_status, explanation_quality
- * }
- */
 export const analyzeXray = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -57,20 +52,11 @@ export const analyzeXray = async (file) => {
   }
 };
 
-/**
- * Runs the same shape of response as analyzeXray, but entirely client-side,
- * for UI development and for DEMO MODE when the backend cannot be reached.
- * caseIndex cycles through a small set of representative demo cases.
- */
 export const analyzeXrayDemo = async (caseIndex = 0) => {
-  // Simulate network + inference latency so loading states are exercised.
   await new Promise((resolve) => setTimeout(resolve, 1400 + Math.random() * 600));
   return buildMockPrediction(caseIndex);
 };
 
-/**
- * GET /api/health — lightweight backend availability check.
- */
 export const checkBackendHealth = async () => {
   try {
     const response = await client.get("/api/health", { timeout: 3000 });
@@ -80,10 +66,6 @@ export const checkBackendHealth = async () => {
   }
 };
 
-/**
- * GET /api/history — analysis history (if the backend persists it).
- * Falls back to null so the UI can use local/demo history instead.
- */
 export const fetchHistory = async () => {
   try {
     const response = await client.get("/api/history");
@@ -93,9 +75,50 @@ export const fetchHistory = async () => {
   }
 };
 
+export const exportReport = async (reportData) => {
+  try {
+    const response = await client.post("/api/report/export", {
+      patient_name: reportData.patient_name || "Patient Scan",
+      prediction: reportData.prediction,
+      confidence: reportData.confidence,
+      probabilities: reportData.probabilities,
+      gradcam_image: reportData.gradcam_image,
+    }, {
+      responseType: "blob"
+    });
+
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `PulmoXAI_Report_${reportData.prediction.replace(/\s+/g, "_")}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return true;
+  } catch (error) {
+    console.error("Failed to export PDF report:", error);
+    throw error;
+  }
+};
+export const fetchGeminiExplanation = async (data) => {
+  const response = await client.post("/api/explain", data);
+  return response.data;
+};
+
+export const sendGeminiChat = async (data) => {
+  const response = await client.post("/api/explain/chat", data);
+  return response.data;
+};
+
 export default {
+  client,
+  post: (url, data, config) => client.post(url, data, config),
+  get: (url, config) => client.get(url, config),
   analyzeXray,
   analyzeXrayDemo,
   checkBackendHealth,
   fetchHistory,
+  exportReport,
+  fetchGeminiExplanation,
+  sendGeminiChat,
 };
