@@ -146,10 +146,17 @@ def generate_lung_explanation(prediction: str, confidence: float, probabilities:
         }}
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
+        model_name = "gemini-2.5-flash"
+        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                )
+                if response and response.text:
+                    break
+            except Exception:
+                continue
 
         clean_text = response.text.strip()
         if clean_text.startswith("```json"):
@@ -188,10 +195,17 @@ def chat_about_scan(user_message: str, prediction: str, confidence: float, proba
         Always remind them to consult a qualified physician for clinical diagnosis.
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
+        model_name = "gemini-2.5-flash"
+        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                )
+                if response and response.text:
+                    break
+            except Exception:
+                continue
         return response.text.strip()
 
     except Exception as e:

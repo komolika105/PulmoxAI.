@@ -68,12 +68,7 @@ def startup_event():
         print("[PulmoxAI API] SQLite Database initialized.")
     except Exception as e:
         print(f"[PulmoxAI API] Warning initializing DB: {e}")
-
-    try:
-        load_model_and_metadata()
-        print("[PulmoxAI API] Keras model ready.")
-    except Exception as e:
-        print(f"[PulmoxAI API] Warning during model startup: {e}")
+    print("[PulmoxAI API] Ready! Backend server started in instant mode.")
 
 
 @app.get("/api/health")

@@ -5,9 +5,6 @@ import time
 import base64
 import numpy as np
 from PIL import Image
-import tensorflow as tf
-from tensorflow.keras.applications.densenet import DenseNet121, preprocess_input
-
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 _MODEL = None
@@ -21,6 +18,9 @@ def load_model_and_metadata():
     global _MODEL, _GRAD_MODEL, _CLASS_INDICES, _CLASS_THRESHOLDS, _IDX_TO_CLASS
     if _MODEL is not None:
         return _MODEL, _GRAD_MODEL, _CLASS_INDICES, _CLASS_THRESHOLDS, _IDX_TO_CLASS
+
+    import tensorflow as tf
+    from tensorflow.keras.applications.densenet import DenseNet121
 
     models_dir = os.path.join(os.path.dirname(__file__), "models")
     indices_path = os.path.join(models_dir, "class_indices.json")
@@ -88,6 +88,7 @@ def pil_to_base64(pil_img, format="JPEG", quality=85):
 
 
 def generate_gradcam(grad_model, img_array, pred_idx):
+    import tensorflow as tf
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
         loss = predictions[:, pred_idx]
@@ -166,6 +167,9 @@ def read_image_from_bytes(image_bytes: bytes) -> Image.Image:
 
 
 def run_prediction_pipeline(image_bytes: bytes):
+    import tensorflow as tf
+    from tensorflow.keras.applications.densenet import preprocess_input
+
     start_time = time.time()
     t0 = time.time()
 
