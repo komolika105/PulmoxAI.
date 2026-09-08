@@ -22,7 +22,7 @@ def load_model_and_metadata():
     import tensorflow as tf
     from tensorflow.keras.applications.densenet import DenseNet121
 
-    models_dir = os.path.join(os.path.dirname(__file__), "models")
+    models_dir = os.path.join(os.path.dirname(__file__), "model2")
     indices_path = os.path.join(models_dir, "class_indices.json")
     thresholds_path = os.path.join(models_dir, "class_thresholds.json")
     weights_path = os.path.join(models_dir, "best_head_weights.h5")

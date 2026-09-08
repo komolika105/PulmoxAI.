@@ -6,7 +6,7 @@ import axios from "axios";
 // to consuming components. Replace the LOCAL_MODE block with the axios
 // calls already sketched below once the backend exists.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const LOCAL_MODE = false;
 const SESSION_KEY = "pulmoxai_session";
 const TOKEN_KEY = "pulmoxai_token";

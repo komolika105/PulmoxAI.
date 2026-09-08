@@ -362,4 +362,4 @@ def export_report(req: ReportExportRequest):
         raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
 
 
-
+
