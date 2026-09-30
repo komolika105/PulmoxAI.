@@ -1,0 +1,7 @@
+{
+    "Atelectasis": 0,
+    "Infiltration": 1,
+    "Lung_Tumor": 2,
+    "Pneumonia": 3,
+    "Tuberculosis": 4
+}

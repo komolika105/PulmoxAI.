@@ -1,0 +1,7 @@
+{
+    "Atelectasis": 0.2901,
+    "Infiltration": 0.2656,
+    "Lung_Tumor": 0.0786,
+    "Pneumonia": 0.2624,
+    "Tuberculosis": 0.0026
+}

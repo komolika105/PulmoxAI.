@@ -22,53 +22,73 @@ def load_model_and_metadata():
     import tensorflow as tf
     from tensorflow.keras.applications.densenet import DenseNet121
 
-    models_dir = os.path.join(os.path.dirname(__file__), "model2")
-    indices_path = os.path.join(models_dir, "class_indices.json")
+    models_dir = os.path.join(os.path.dirname(__file__), "Model3")
+    if not os.path.isdir(models_dir):
+        models_dir = os.path.join(os.path.dirname(__file__), "model2")
+
+    indices_path = os.path.join(models_dir, "disease_indices.json")
+    if not os.path.exists(indices_path):
+        indices_path = os.path.join(models_dir, "class_indices.json")
+
     thresholds_path = os.path.join(models_dir, "class_thresholds.json")
-    weights_path = os.path.join(models_dir, "best_head_weights.h5")
+    final_model_path = os.path.join(models_dir, "final_model.keras")
+    best_model_path = os.path.join(models_dir, "best_full_model.h5")
 
     with open(indices_path, "r") as f:
         _CLASS_INDICES = json.load(f)
-    
+
     with open(thresholds_path, "r") as f:
         _CLASS_THRESHOLDS = json.load(f)
 
-    # Invert mapping: index -> class string
     _IDX_TO_CLASS = {v: k for k, v in _CLASS_INDICES.items()}
 
-    # Construct model architecture
-    base_model = DenseNet121(input_shape=(224, 224, 3), include_top=False, weights="imagenet")
-    x = base_model.output
-    x = tf.keras.layers.GlobalAveragePooling2D(name="gap")(x)
-    x = tf.keras.layers.Dropout(0.3, name="head_dropout")(x)
-    x = tf.keras.layers.Dense(256, activation="relu", name="head_dense")(x)
-    outputs = tf.keras.layers.Dense(4, activation="softmax", name="dense_output")(x)
-    
-    _MODEL = tf.keras.models.Model(inputs=base_model.input, outputs=outputs)
-
-    if os.path.exists(weights_path):
+    if os.path.exists(final_model_path):
         try:
-            _MODEL.load_weights(weights_path, by_name=True)
-            print(f"[PulmoXAI Model Engine] Loaded head weights from {weights_path}")
+            _MODEL = tf.keras.models.load_model(final_model_path, compile=False)
+            print(f"[PulmoXAI Model Engine] Loaded Model3 Keras model from {final_model_path}")
         except Exception as e:
-            print(f"[PulmoXAI Model Engine] Warning loading head weights: {e}")
+            print(f"[PulmoXAI Model Engine] Warning loading final_model.keras: {e}")
 
-    # Build and cache Grad-CAM model
+    if _MODEL is None and os.path.exists(best_model_path):
+        try:
+            _MODEL = tf.keras.models.load_model(best_model_path, compile=False)
+            print(f"[PulmoXAI Model Engine] Loaded Model3 H5 model from {best_model_path}")
+        except Exception as e:
+            print(f"[PulmoXAI Model Engine] Warning loading best_full_model.h5: {e}")
+
+    if _MODEL is None:
+        weights_path = os.path.join(models_dir, "best_head_weights.h5")
+        base_model = DenseNet121(input_shape=(224, 224, 3), include_top=False, weights="imagenet")
+        x = base_model.output
+        x = tf.keras.layers.GlobalAveragePooling2D(name="gap")(x)
+        x = tf.keras.layers.Dropout(0.3, name="head_dropout")(x)
+        x = tf.keras.layers.Dense(256, activation="relu", name="head_dense")(x)
+        outputs = tf.keras.layers.Dense(len(_CLASS_INDICES), activation="softmax", name="dense_output")(x)
+        _MODEL = tf.keras.models.Model(inputs=base_model.input, outputs=outputs)
+
+        if os.path.exists(weights_path):
+            try:
+                _MODEL.load_weights(weights_path, by_name=True)
+                print(f"[PulmoXAI Model Engine] Loaded head weights from {weights_path}")
+            except Exception as e:
+                print(f"[PulmoXAI Model Engine] Warning loading head weights: {e}")
+
     try:
         last_conv_layer_name = "conv5_block16_concat"
+        if not hasattr(_MODEL.get_layer(last_conv_layer_name), "output"):
+            raise ValueError
         _GRAD_MODEL = tf.keras.models.Model(
             inputs=[_MODEL.inputs],
             outputs=[_MODEL.get_layer(last_conv_layer_name).output, _MODEL.output]
         )
     except Exception:
-        conv_layers = [l.name for l in _MODEL.layers if "conv" in l.name or "concat" in l.name or "relu" in l.name]
-        last_conv_layer_name = conv_layers[-1] if conv_layers else _MODEL.layers[-4].name
+        conv_layers = [l.name for l in _MODEL.layers if "conv" in l.name or "concat" in l.name]
+        last_conv_layer_name = conv_layers[-1] if conv_layers else _MODEL.layers[-2].name
         _GRAD_MODEL = tf.keras.models.Model(
             inputs=[_MODEL.inputs],
             outputs=[_MODEL.get_layer(last_conv_layer_name).output, _MODEL.output]
         )
 
-    # Warmup pass
     dummy = np.zeros((1, 224, 224, 3), dtype=np.float32)
     _MODEL.predict(dummy, verbose=0)
     with tf.GradientTape() as tape:
@@ -199,6 +219,8 @@ def run_prediction_pipeline(image_bytes: bytes):
         "Atelectasis": "Atelectasis",
         "Infiltration": "Infiltration",
         "Lung_Tumor": "Lung Tumor",
+        "Pneumonia": "Pneumonia",
+        "Tuberculosis": "Tuberculosis",
         "No_Finding": "No Finding"
     }
 

@@ -3,14 +3,14 @@ import { analyzeXray, analyzeXrayDemo, BackendUnavailableError, InvalidImageErro
 
 export const STAGES = [
   { key: "preprocessing", label: "Preprocessing" },
-  { key: "segmentation", label: "Lung segmentation" },
+  { key: "segmentation", label: "Region overlay" },
   { key: "classification", label: "Disease classification" },
   { key: "explanations", label: "Generating explanations" },
 ];
 
 /**
- * Drives the analyze flow: stage progression, backend call (with automatic
- * demo-mode fallback), result state, and error state. Kept independent of
+ * Drives the analyze flow: stage progression, backend call, explicit demo
+ * mode, result state, and error state. Kept independent of
  * any single component so both Analyze and future pages can reuse it.
  */
 export function usePrediction() {
@@ -33,6 +33,7 @@ export function usePrediction() {
       setStatus("analyzing");
       setError(null);
       setResult(null);
+      setIsDemoMode(false);
 
       const stagesPromise = runStages();
 
@@ -46,10 +47,10 @@ export function usePrediction() {
             data = await analyzeXray(file);
             setIsDemoMode(false);
           } catch (err) {
-            if (err instanceof InvalidImageError) throw err;
-            // Backend unreachable — fall back to demo mode so the UI remains usable.
-            data = await analyzeXrayDemo(demoCaseIndex);
-            setIsDemoMode(true);
+            if (err instanceof InvalidImageError) {
+              throw err;
+            }
+            throw new BackendUnavailableError(err?.message || "Unable to connect to the analysis server.");
           }
         }
 
@@ -64,6 +65,7 @@ export function usePrediction() {
           setError("Something went wrong while analyzing this image. Please try again.");
         }
         setStatus("error");
+        setIsDemoMode(false);
       } finally {
         setStageIndex(-1);
       }
@@ -75,6 +77,7 @@ export function usePrediction() {
     setStatus("idle");
     setResult(null);
     setError(null);
+    setIsDemoMode(false);
     setStageIndex(-1);
   }, []);
 

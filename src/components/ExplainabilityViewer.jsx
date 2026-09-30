@@ -10,15 +10,15 @@ const METHODS = [
   },
   {
     key: "gradcam_plus",
-    title: "Grad-CAM++",
-    description: "Provides refined class-specific localization of important regions.",
-    legend: "Sharper, more localized activation compared to Grad-CAM.",
+    title: "Focused Grad-CAM",
+    description: "Shows the same Grad-CAM activation with stronger emphasis on higher-response regions.",
+    legend: "Higher activation values are emphasized.",
   },
   {
     key: "lime",
-    title: "LIME",
-    description: "Provides a local explanation by identifying image regions that influence the individual prediction.",
-    legend: "Outlined superpixels show regions with the greatest local influence.",
+    title: "Thresholded Grad-CAM",
+    description: "Shows a binary view of the Grad-CAM activation map for the uploaded image.",
+    legend: "Highlighted pixels exceed the activation threshold.",
   },
 ];
 

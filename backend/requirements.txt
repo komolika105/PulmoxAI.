@@ -2,3 +2,16 @@ fastapi
 uvicorn[standard]
 python-multipart
 python-dotenv
+sqlalchemy
+PyJWT
+passlib[bcrypt]
+python-jose[cryptography]
+email-validator
+pydantic[email]
+reportlab
+Pillow
+numpy
+matplotlib
+opencv-python
+tensorflow
+pydicom

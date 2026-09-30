@@ -6,7 +6,7 @@ import { buildMockPrediction } from "./mockData";
 // can be swapped for the real FastAPI + PyTorch backend with zero UI changes.
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 120000;
 
 export const client = axios.create({
   baseURL: API_BASE_URL,

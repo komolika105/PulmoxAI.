@@ -9,7 +9,7 @@ export default function SegmentationViewer({ originalImage, segmentationImage })
     <div className="rounded-2xl border bg-white p-6" style={{ borderColor: "var(--color-border)" }}>
       <div className="flex items-start justify-between gap-3 mb-1">
         <p className="font-display text-base font-semibold" style={{ color: "var(--color-navy)" }}>
-          Anatomical Lung Segmentation
+          Intensity-Based Region Overlay
         </p>
         <button
           onClick={() => setFullscreen(true)}
@@ -21,7 +21,7 @@ export default function SegmentationViewer({ originalImage, segmentationImage })
         </button>
       </div>
       <p className="text-sm mb-4" style={{ color: "var(--color-navy-soft)" }}>
-        U-Net identifies the anatomical lung region to reduce the influence of irrelevant image regions during classification.
+        Cyan shading marks darker pixels in the uploaded image. This visual aid is a simple intensity threshold, not a trained lung-segmentation model.
       </p>
 
       <div

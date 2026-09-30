@@ -5,16 +5,16 @@ import numpy as np
 import tensorflow as tf
 
 def test_inference():
-    model_path = os.path.abspath("model2/best_full_model.h5")
+    model_path = os.path.abspath("Model3/final_model.keras")
     print(f"Loading model from {model_path}...")
     model = tf.keras.models.load_model(model_path)
     print("Model loaded successfully!")
-    
-    with open("model2/class_indices.json") as f:
+
+    with open("Model3/disease_indices.json") as f:
         class_indices = json.load(f)
     print("Class indices:", class_indices)
 
-    with open("model2/class_thresholds.json") as f:
+    with open("Model3/class_thresholds.json") as f:
         class_thresholds = json.load(f)
     print("Class thresholds:", class_thresholds)
 
