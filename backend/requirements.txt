@@ -13,5 +13,6 @@ Pillow
 numpy
 matplotlib
 opencv-python
-tensorflow
+tensorflow==2.15.1
 pydicom
+google-genai>=2.22.0,<3.0.0

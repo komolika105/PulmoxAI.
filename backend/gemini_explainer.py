@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -7,6 +8,50 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
     GEMINI_API_KEY = ""
+
+GEMINI_TIMEOUT_MS = max(10000, int(os.getenv("GEMINI_TIMEOUT_MS", "10000")))
+GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_QUOTA_COOLDOWN_SECONDS = 30
+_GEMINI_CLIENT = None
+_GEMINI_UNAVAILABLE_UNTIL = 0.0
+
+
+def _generate_gemini_content(prompt: str, response_mime_type: str, max_output_tokens: int) -> str:
+    global _GEMINI_CLIENT, _GEMINI_UNAVAILABLE_UNTIL
+    from google import genai
+    from google.genai import types
+
+    if time.monotonic() < _GEMINI_UNAVAILABLE_UNTIL:
+        raise RuntimeError("Gemini is temporarily rate-limited; using the structured fallback")
+
+    if _GEMINI_CLIENT is None:
+        _GEMINI_CLIENT = genai.Client(
+            api_key=GEMINI_API_KEY,
+            http_options=types.HttpOptions(
+                timeout=GEMINI_TIMEOUT_MS,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
+
+    try:
+        response = _GEMINI_CLIENT.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=max_output_tokens,
+                response_mime_type=response_mime_type,
+            ),
+        )
+    except Exception as error:
+        message = str(error)
+        if "429" in message or "RESOURCE_EXHAUSTED" in message:
+            _GEMINI_UNAVAILABLE_UNTIL = time.monotonic() + GEMINI_QUOTA_COOLDOWN_SECONDS
+        raise
+    if not response or not response.text:
+        raise RuntimeError("Gemini returned an empty response")
+    _GEMINI_UNAVAILABLE_UNTIL = 0.0
+    return response.text.strip()
 
 
 def get_fallback_explanation(prediction: str, confidence: float, probabilities: dict) -> dict:
@@ -93,6 +138,60 @@ def get_fallback_explanation(prediction: str, confidence: float, probabilities: 
             ],
             "next_steps": "Follow up with a healthcare provider for clinical evaluation, laboratory workups, and potential antimicrobial or anti-inflammatory therapy."
         }
+    elif prediction == "Pneumonia":
+        return {
+            "title": "Understanding Your X-Ray Finding: Pneumonia Pattern",
+            "summary": f"The model found image features that can be associated with pneumonia ({conf_pct}). An X-ray alone cannot confirm the cause.",
+            "lung_anatomy_explanation": (
+                "Pneumonia can inflame the lung tissue and fill some air sacs with fluid or inflammatory material. "
+                "On an X-ray, this may appear as a localized or patchy opacity. Similar appearances can have other causes, "
+                "so a clinician must interpret the image together with symptoms and examination findings."
+            ),
+            "key_findings": [
+                "The model detected a pattern associated with the pneumonia class.",
+                "The raw model probability is not a confirmed diagnosis.",
+                "Clinical history and radiologist review are needed for interpretation."
+            ],
+            "symptoms_to_monitor": [
+                "Fever or chills",
+                "Persistent or worsening cough",
+                "Shortness of breath",
+                "Chest pain when breathing or coughing"
+            ],
+            "doctor_questions": [
+                "Does the X-ray show consolidation consistent with my symptoms?",
+                "Do I need additional testing to determine the cause?",
+                "What symptoms should prompt urgent reassessment?"
+            ],
+            "next_steps": "Discuss the image and symptoms with a qualified healthcare professional; seek urgent care for severe breathing difficulty or rapidly worsening symptoms."
+        }
+    elif prediction == "Tuberculosis":
+        return {
+            "title": "Understanding Your X-Ray Finding: Tuberculosis-Associated Pattern",
+            "summary": f"The model found image features associated with tuberculosis ({conf_pct}); this result cannot determine whether TB is active or confirm infection.",
+            "lung_anatomy_explanation": (
+                "Tuberculosis can affect lung tissue and produce areas of opacity or other changes on chest imaging. "
+                "These findings are not specific to TB, and an X-ray cannot distinguish active disease from prior infection. "
+                "A clinician may consider symptoms, exposure history, sputum testing, and other laboratory tests."
+            ),
+            "key_findings": [
+                "The model detected a pattern associated with the tuberculosis class.",
+                "Imaging alone cannot confirm active tuberculosis.",
+                "Clinical and laboratory evaluation is needed."
+            ],
+            "symptoms_to_monitor": [
+                "A cough lasting several weeks",
+                "Fever or night sweats",
+                "Unexplained weight loss",
+                "Coughing up blood"
+            ],
+            "doctor_questions": [
+                "Should I have a TB blood or skin test and sputum testing?",
+                "Does my exposure history change the recommended evaluation?",
+                "Should I take precautions while awaiting assessment?"
+            ],
+            "next_steps": "Contact a healthcare professional or local public-health service for appropriate TB assessment, especially if you have symptoms or a known exposure."
+        }
     else: # No Finding / Normal
         return {
             "title": "Understanding Your X-Ray Finding: Normal / Clear Lung Fields",
@@ -123,9 +222,6 @@ def generate_lung_explanation(prediction: str, confidence: float, probabilities:
         return get_fallback_explanation(prediction, confidence, probabilities)
 
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-
         prompt = f"""
         You are an expert, compassionate pulmonologist and medical educator.
         A chest X-ray AI model analyzed a patient's scan and returned the following result:
@@ -146,19 +242,11 @@ def generate_lung_explanation(prediction: str, confidence: float, probabilities:
         }}
         """
 
-        model_name = "gemini-2.5-flash"
-        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]:
-            try:
-                response = client.models.generate_content(
-                    model=m,
-                    contents=prompt,
-                )
-                if response and response.text:
-                    break
-            except Exception:
-                continue
-
-        clean_text = response.text.strip()
+        clean_text = _generate_gemini_content(
+            prompt,
+            response_mime_type="application/json",
+            max_output_tokens=700,
+        )
         if clean_text.startswith("```json"):
             clean_text = clean_text[7:]
         if clean_text.endswith("```"):
@@ -181,9 +269,6 @@ def chat_about_scan(user_message: str, prediction: str, confidence: float, proba
         )
 
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-
         prompt = f"""
         You are PulmoXAI's empathetic medical AI assistant.
         Patient's X-ray scan prediction: {prediction} ({confidence*100:.1f}% confidence).
@@ -195,18 +280,11 @@ def chat_about_scan(user_message: str, prediction: str, confidence: float, proba
         Always remind them to consult a qualified physician for clinical diagnosis.
         """
 
-        model_name = "gemini-2.5-flash"
-        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]:
-            try:
-                response = client.models.generate_content(
-                    model=m,
-                    contents=prompt,
-                )
-                if response and response.text:
-                    break
-            except Exception:
-                continue
-        return response.text.strip()
+        return _generate_gemini_content(
+            prompt,
+            response_mime_type="text/plain",
+            max_output_tokens=450,
+        )
 
     except Exception as e:
         print(f"[Gemini Chat Warning] {e}")

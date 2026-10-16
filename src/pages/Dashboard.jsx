@@ -39,7 +39,7 @@ function LungHero() {
 }
 
 const HOW_IT_WORKS = [
-  { icon: UploadCloud, title: "Upload your X-ray", body: "Add a chest X-ray image in seconds — JPG or PNG, no special setup." },
+  { icon: UploadCloud, title: "Upload your X-ray", body: "Add a chest X-ray image in seconds — JPG, JPE, or PNG, no special setup." },
   { icon: ScanLine, title: "AI scans the image", body: "The image is analyzed and the lung region is automatically identified." },
   { icon: Sparkles, title: "Get a clear explanation", body: "See the result alongside a visual explanation of what the AI focused on." },
 ];

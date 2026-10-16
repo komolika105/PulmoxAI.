@@ -47,6 +47,10 @@ export const uncertaintyTone = (level) => {
 export const classColor = (className) => {
   const map = {
     Normal: "#0E8E7D",
+    "No Finding": "#0E8E7D",
+    Atelectasis: "#C2760C",
+    Infiltration: "#0B7285",
+    "Lung Tumor": "#C4324B",
     Pneumonia: "#3654D6",
     Tuberculosis: "#C4324B",
     Other: "#C2760C",

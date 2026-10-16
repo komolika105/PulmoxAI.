@@ -12,8 +12,8 @@ export default function ImageUploader({ onFileSelected, onLoadDemo, previewUrl, 
   const validateAndSet = useCallback(
     (file) => {
       if (!file) return;
-      if (!ACCEPTED.includes(file.type)) {
-        setValidationError("Unsupported format. Upload a JPG or PNG image.");
+      if (!ACCEPTED.includes(file.type) && !file.name.toLowerCase().endsWith(".jpe")) {
+        setValidationError("Unsupported format. Upload a JPG, JPE, or PNG image.");
         return;
       }
       if (file.size > MAX_SIZE_MB * 1024 * 1024) {
@@ -94,7 +94,7 @@ export default function ImageUploader({ onFileSelected, onLoadDemo, previewUrl, 
         <input
           ref={inputRef}
           type="file"
-          accept=".jpg,.jpeg,.png"
+          accept=".jpg,.jpeg,.jpe,.png"
           className="hidden"
           onChange={(e) => validateAndSet(e.target.files?.[0])}
         />
@@ -109,7 +109,7 @@ export default function ImageUploader({ onFileSelected, onLoadDemo, previewUrl, 
         </p>
         <p className="mt-1 text-sm" style={{ color: "var(--color-navy-soft)" }}>or click to browse your files</p>
         <p className="mt-4 font-mono text-xs" style={{ color: "var(--color-navy-soft)" }}>
-          JPG, JPEG, PNG · Max {MAX_SIZE_MB} MB
+          JPG, JPEG, JPE, PNG · Max {MAX_SIZE_MB} MB
         </p>
       </div>
 

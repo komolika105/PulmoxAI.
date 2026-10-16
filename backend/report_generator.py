@@ -13,6 +13,10 @@ def generate_pdf_report(
     prediction: str,
     confidence: float,
     probabilities: dict,
+    risk_score: float = None,
+    risk_scores: dict = None,
+    thresholds: dict = None,
+    detected_conditions: list = None,
     gradcam_base64: str = None,
     created_at: datetime = None
 ) -> bytes:
@@ -89,7 +93,7 @@ def generate_pdf_report(
     info_data = [
         [Paragraph("<b>Patient Name:</b>", body_style), Paragraph(patient_name or "Anonymous Patient", body_style)],
         [Paragraph("<b>Scan Date:</b>", body_style), Paragraph(date_str, body_style)],
-        [Paragraph("<b>Model Backend:</b>", body_style), Paragraph("DenseNet121 + XAI Grad-CAM Engine", body_style)],
+        [Paragraph("<b>Model Backend:</b>", body_style), Paragraph("MobileNetV2 multi-label + Grad-CAM", body_style)],
     ]
     info_table = Table(info_data, colWidths=[130, 410])
     info_table.setStyle(TableStyle([
@@ -104,11 +108,13 @@ def generate_pdf_report(
     # 3. AI Prediction Summary
     story.append(Paragraph("Primary AI Diagnostic Prediction", heading_style))
 
-    conf_pct = f"{confidence * 100:.1f}%"
+    primary_score = risk_score if risk_score is not None else confidence
+    score_label = "Diagnostic risk score" if risk_score is not None else "Raw model score"
+    score_pct = f"{primary_score * 100:.1f}%"
     pred_data = [
         [
             Paragraph(f"<font color='#0f172a' size=14><b>Predicted Condition: {prediction}</b></font>", body_style),
-            Paragraph(f"<font color='#0d9488' size=14><b>Confidence: {conf_pct}</b></font>", body_style)
+            Paragraph(f"<font color='#0d9488' size=14><b>{score_label}: {score_pct}</b></font>", body_style)
         ]
     ]
     pred_table = Table(pred_data, colWidths=[340, 200])
@@ -123,14 +129,20 @@ def generate_pdf_report(
 
     # 4. Class Probabilities Table
     story.append(Paragraph("Condition Probability Breakdown", heading_style))
-    prob_rows = [["Disease Condition", "Model Probability Score", "Risk Category"]]
+    prob_rows = [["Disease", "Risk score", "Raw probability", "Threshold / status"]]
     
     for cls_name, prob_val in probabilities.items():
-        prob_pct = f"{prob_val * 100:.2f}%"
-        risk = "Low" if prob_val < 0.25 else ("Moderate" if prob_val < 0.5 else "High")
-        prob_rows.append([cls_name, prob_pct, risk])
+        raw_pct = f"{prob_val * 100:.2f}%"
+        risk_pct = f"{(risk_scores or {}).get(cls_name, prob_val) * 100:.2f}%"
+        threshold = (thresholds or {}).get(cls_name)
+        if threshold is None:
+            status = "Threshold unavailable"
+        else:
+            detected = prob_val >= threshold
+            status = f"{threshold * 100:.2f}% / {'Detected' if detected else 'Below threshold'}"
+        prob_rows.append([cls_name, risk_pct, raw_pct, status])
 
-    prob_table = Table(prob_rows, colWidths=[200, 200, 140])
+    prob_table = Table(prob_rows, colWidths=[130, 100, 110, 200])
     prob_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), PRIMARY),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -141,6 +153,11 @@ def generate_pdf_report(
     ]))
     story.append(prob_table)
     story.append(Spacer(1, 15))
+
+    if detected_conditions is not None:
+        detected_text = ", ".join(detected_conditions) if detected_conditions else "None (implicit No Finding)"
+        story.append(Paragraph(f"<b>Threshold-positive diseases:</b> {detected_text}", body_style))
+        story.append(Spacer(1, 12))
 
     # 5. Grad-CAM Explainability Image
     if gradcam_base64 and "," in gradcam_base64:

@@ -2,8 +2,14 @@ import { Info } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { classColor, formatPercent, uncertaintyTone } from "../utils/formatters";
 
-export default function PredictionCard({ prediction, confidence, uncertainty, calibrationStatus }) {
+export default function PredictionCard({ prediction, confidence, riskScore, detectedConditions, uncertainty, calibrationStatus }) {
   const color = classColor(prediction);
+  const displayedScore = riskScore ?? confidence;
+  const scoreLabel = riskScore === undefined
+    ? "Confidence"
+    : prediction === "No Finding"
+      ? "Highest disease risk"
+      : "Diagnostic risk score";
   return (
     <div className="rounded-2xl border bg-white p-6" style={{ borderColor: "var(--color-border)" }}>
       <p className="font-mono text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-navy-soft)" }}>
@@ -15,16 +21,22 @@ export default function PredictionCard({ prediction, confidence, uncertainty, ca
           className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
           style={{ borderColor: `${color}33`, backgroundColor: `${color}14`, color }}
         >
-          Confidence {formatPercent(confidence)}
+          {scoreLabel} {formatPercent(displayedScore)}
         </span>
       </div>
 
       <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-surface-alt)" }}>
         <div
           className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${Math.min(confidence * 100, 100)}%`, backgroundColor: color }}
+          style={{ width: `${Math.min(displayedScore * 100, 100)}%`, backgroundColor: color }}
         />
       </div>
+
+      {detectedConditions?.length > 0 && (
+        <p className="mt-3 text-sm" style={{ color: "var(--color-navy-soft)" }}>
+          Threshold-positive: {detectedConditions.join(", ")}
+        </p>
+      )}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${uncertaintyTone(uncertainty)}`}>

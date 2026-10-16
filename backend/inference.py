@@ -14,17 +14,19 @@ _CLASS_THRESHOLDS = None
 _IDX_TO_CLASS = None
 
 
+class InvalidChestXrayError(ValueError):
+    pass
+
+
 def load_model_and_metadata():
     global _MODEL, _GRAD_MODEL, _CLASS_INDICES, _CLASS_THRESHOLDS, _IDX_TO_CLASS
     if _MODEL is not None:
         return _MODEL, _GRAD_MODEL, _CLASS_INDICES, _CLASS_THRESHOLDS, _IDX_TO_CLASS
 
     import tensorflow as tf
-    from tensorflow.keras.applications.densenet import DenseNet121
-
     models_dir = os.path.join(os.path.dirname(__file__), "Model3")
     if not os.path.isdir(models_dir):
-        models_dir = os.path.join(os.path.dirname(__file__), "model2")
+        raise FileNotFoundError(f"Model3 directory not found: {models_dir}")
 
     indices_path = os.path.join(models_dir, "disease_indices.json")
     if not os.path.exists(indices_path):
@@ -57,44 +59,41 @@ def load_model_and_metadata():
             print(f"[PulmoXAI Model Engine] Warning loading best_full_model.h5: {e}")
 
     if _MODEL is None:
-        weights_path = os.path.join(models_dir, "best_head_weights.h5")
-        base_model = DenseNet121(input_shape=(224, 224, 3), include_top=False, weights="imagenet")
-        x = base_model.output
-        x = tf.keras.layers.GlobalAveragePooling2D(name="gap")(x)
-        x = tf.keras.layers.Dropout(0.3, name="head_dropout")(x)
-        x = tf.keras.layers.Dense(256, activation="relu", name="head_dense")(x)
-        outputs = tf.keras.layers.Dense(len(_CLASS_INDICES), activation="softmax", name="dense_output")(x)
-        _MODEL = tf.keras.models.Model(inputs=base_model.input, outputs=outputs)
+        raise RuntimeError(f"Unable to load the Model3 artifact from {models_dir}")
 
-        if os.path.exists(weights_path):
-            try:
-                _MODEL.load_weights(weights_path, by_name=True)
-                print(f"[PulmoXAI Model Engine] Loaded head weights from {weights_path}")
-            except Exception as e:
-                print(f"[PulmoXAI Model Engine] Warning loading head weights: {e}")
+    if int(_MODEL.output_shape[-1]) != len(_CLASS_INDICES):
+        raise ValueError(
+            f"Model3 has {_MODEL.output_shape[-1]} outputs but metadata defines "
+            f"{len(_CLASS_INDICES)} classes"
+        )
 
-    try:
-        last_conv_layer_name = "conv5_block16_concat"
-        if not hasattr(_MODEL.get_layer(last_conv_layer_name), "output"):
-            raise ValueError
-        _GRAD_MODEL = tf.keras.models.Model(
-            inputs=[_MODEL.inputs],
-            outputs=[_MODEL.get_layer(last_conv_layer_name).output, _MODEL.output]
-        )
-    except Exception:
-        conv_layers = [l.name for l in _MODEL.layers if "conv" in l.name or "concat" in l.name]
-        last_conv_layer_name = conv_layers[-1] if conv_layers else _MODEL.layers[-2].name
-        _GRAD_MODEL = tf.keras.models.Model(
-            inputs=[_MODEL.inputs],
-            outputs=[_MODEL.get_layer(last_conv_layer_name).output, _MODEL.output]
-        )
+    conv_layer = next(
+        (
+            layer for layer in reversed(_MODEL.layers)
+            if getattr(layer.output, "shape", None) is not None
+            and len(layer.output.shape) == 4
+        ),
+        None,
+    )
+    if conv_layer is None:
+        raise RuntimeError("Model3 has no rank-4 feature layer for Grad-CAM")
+
+    conv_layer_index = _MODEL.layers.index(conv_layer)
+    conv_features = conv_layer(_MODEL.inputs[0])
+    predictions = conv_features
+    for layer in _MODEL.layers[conv_layer_index + 1:]:
+        predictions = layer(predictions)
+    _GRAD_MODEL = tf.keras.models.Model(
+        inputs=_MODEL.inputs,
+        outputs=[conv_features, predictions],
+    )
 
     dummy = np.zeros((1, 224, 224, 3), dtype=np.float32)
-    _MODEL.predict(dummy, verbose=0)
     with tf.GradientTape() as tape:
-        conv_out, preds = _GRAD_MODEL(dummy)
+        conv_out, preds = _GRAD_MODEL(dummy, training=False)
         loss = preds[:, 0]
-    tape.gradient(loss, conv_out)
+    if tape.gradient(loss, conv_out) is None:
+        raise RuntimeError("Unable to compute Model3 Grad-CAM gradients")
     print("[PulmoXAI Model Engine] Model pre-warmed & compiled.")
 
     return _MODEL, _GRAD_MODEL, _CLASS_INDICES, _CLASS_THRESHOLDS, _IDX_TO_CLASS
@@ -105,22 +104,6 @@ def pil_to_base64(pil_img, format="JPEG", quality=85):
     pil_img.save(buffer, format=format, quality=quality)
     encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
     return f"data:image/{format.lower()};base64,{encoded}"
-
-
-def generate_gradcam(grad_model, img_array, pred_idx):
-    import tensorflow as tf
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(img_array)
-        loss = predictions[:, pred_idx]
-
-    grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-
-    conv_outputs = conv_outputs[0]
-    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-    heatmap = tf.squeeze(heatmap)
-    heatmap = tf.maximum(heatmap, 0) / (tf.reduce_max(heatmap) + 1e-10)
-    return heatmap.numpy()
 
 
 def apply_colormap_overlay(orig_np, heatmap_2d, colormap_type="jet", alpha=0.45):
@@ -186,14 +169,33 @@ def read_image_from_bytes(image_bytes: bytes) -> Image.Image:
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
+def preprocess_xray(raw_image: Image.Image) -> np.ndarray:
+    import cv2
+
+    rgb = np.asarray(raw_image.convert("RGB"), dtype=np.uint8)
+    color_delta = np.mean(
+        np.abs(rgb[..., 0].astype(np.float32) - rgb[..., 1])
+        + np.abs(rgb[..., 1].astype(np.float32) - rgb[..., 2])
+    )
+    if color_delta > 25.0:
+        raise InvalidChestXrayError(
+            "Uploaded image appears to be a color photograph. Please upload a valid grayscale chest X-ray image."
+        )
+
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    resized = cv2.resize(enhanced, (224, 224), interpolation=cv2.INTER_LINEAR)
+    expanded = cv2.cvtColor(resized, cv2.COLOR_GRAY2RGB)
+    return expanded.astype(np.float32) / 127.5 - 1.0
+
+
 def run_prediction_pipeline(image_bytes: bytes):
     import tensorflow as tf
-    from tensorflow.keras.applications.densenet import preprocess_input
-
-    start_time = time.time()
-    t0 = time.time()
 
     model, grad_model, class_indices, class_thresholds, idx_to_class = load_model_and_metadata()
+    start_time = time.perf_counter()
+    t0 = start_time
 
     # 1. Preprocessing (supports JPG, PNG, and DICOM .dcm)
     raw_pil = read_image_from_bytes(image_bytes)
@@ -203,17 +205,52 @@ def run_prediction_pipeline(image_bytes: bytes):
     disp_pil.thumbnail((512, 512), Image.Resampling.BILINEAR)
     orig_np = np.array(disp_pil, dtype=np.uint8)
 
-    resized_pil = raw_pil.resize((224, 224), Image.Resampling.BILINEAR)
-    img_array = np.array(resized_pil, dtype=np.float32)
-    img_array = preprocess_input(img_array)
+    img_array = preprocess_xray(raw_pil)
     img_batch = np.expand_dims(img_array, axis=0)
 
-    t_preprocess = int((time.time() - t0) * 1000)
+    t_preprocess = int((time.perf_counter() - t0) * 1000)
 
-    # 2. Classification Inference
-    t0 = time.time()
-    preds = model.predict(img_batch, verbose=0)[0]
-    t_classify = int((time.time() - t0) * 1000)
+    thresholds = np.asarray(
+        [class_thresholds[idx_to_class[index]] for index in range(len(idx_to_class))],
+        dtype=np.float32,
+    )
+    threshold_tensor = tf.convert_to_tensor(thresholds)
+    t0 = time.perf_counter()
+    with tf.GradientTape() as tape:
+        conv_outputs, prediction_tensor = grad_model(img_batch, training=False)
+        probabilities_tensor = prediction_tensor[0]
+        above_threshold = probabilities_tensor >= threshold_tensor
+        below_threshold_scores = (probabilities_tensor / threshold_tensor) * 0.49
+        above_threshold_scores = 0.5 + (
+            (probabilities_tensor - threshold_tensor) / (1.0 - threshold_tensor)
+        ) * 0.5
+        risk_tensor = tf.clip_by_value(
+            tf.where(above_threshold, above_threshold_scores, below_threshold_scores),
+            0.0,
+            1.0,
+        )
+        eligible_scores = tf.where(above_threshold, risk_tensor, -1.0)
+        selected_idx_tensor = tf.argmax(
+            tf.where(tf.reduce_any(above_threshold), eligible_scores, risk_tensor),
+            output_type=tf.int32,
+        )
+        loss = tf.gather(probabilities_tensor, selected_idx_tensor)
+    t_classify = int((time.perf_counter() - t0) * 1000)
+
+    t0 = time.perf_counter()
+    gradients = tape.gradient(loss, conv_outputs)
+    if gradients is None:
+        raise RuntimeError("Unable to compute Model3 Grad-CAM gradients")
+    pooled_grads = tf.reduce_mean(gradients, axis=(0, 1, 2))
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / (tf.reduce_max(heatmap) + 1e-10)
+    heatmap_2d = heatmap.numpy()
+    preds = probabilities_tensor.numpy()
+    top_idx = int(selected_idx_tensor.numpy())
+    risk_values = risk_tensor.numpy()
+    t_gradient = int((time.perf_counter() - t0) * 1000)
 
     display_names = {
         "Atelectasis": "Atelectasis",
@@ -225,47 +262,53 @@ def run_prediction_pipeline(image_bytes: bytes):
     }
 
     raw_probs = {}
+    risk_scores = {}
+    output_thresholds = {}
+    detected_conditions = []
     for idx, raw_class in idx_to_class.items():
         name = display_names.get(raw_class, raw_class)
         raw_probs[name] = float(preds[idx])
+        risk_scores[name] = float(risk_values[idx])
+        output_thresholds[name] = float(class_thresholds[raw_class])
+        if preds[idx] >= class_thresholds[raw_class]:
+            detected_conditions.append(name)
 
-    top_idx = int(np.argmax(preds))
-    top_raw_class = idx_to_class[top_idx]
-    predicted_label = display_names.get(top_raw_class, top_raw_class)
+    if detected_conditions:
+        predicted_label = display_names.get(idx_to_class[top_idx], idx_to_class[top_idx])
+    else:
+        predicted_label = "No Finding"
     confidence = float(preds[top_idx])
+    risk_score = float(risk_values[top_idx])
 
     # 3. Segmentation Mask
-    t0 = time.time()
+    t0 = time.perf_counter()
     seg_pil = generate_segmentation_mask(orig_np)
-    t_segment = int((time.time() - t0) * 1000)
+    t_segment = int((time.perf_counter() - t0) * 1000)
 
-    # 4. Fast Explainability Maps
-    t0 = time.time()
-    heatmap_2d = generate_gradcam(grad_model, img_batch, top_idx)
-
+    t0 = time.perf_counter()
     gradcam_pil = apply_colormap_overlay(orig_np, heatmap_2d, "jet", alpha=0.45)
-    gradcam_plus_pil = apply_colormap_overlay(orig_np, heatmap_2d ** 1.3, "viridis", alpha=0.5)
-    lime_pil = apply_colormap_overlay(orig_np, (heatmap_2d > 0.35).astype(np.float32), "inferno", alpha=0.4)
-    t_xai = int((time.time() - t0) * 1000)
+    t_xai = t_gradient + int((time.perf_counter() - t0) * 1000)
 
-    total_time_ms = int((time.time() - start_time) * 1000)
+    total_time_ms = int((time.perf_counter() - start_time) * 1000)
 
     return {
         "prediction": predicted_label,
         "confidence": round(confidence, 4),
         "probabilities": {k: round(v, 4) for k, v in raw_probs.items()},
+        "risk_scores": {k: round(v, 4) for k, v in risk_scores.items()},
+        "thresholds": {k: round(v, 4) for k, v in output_thresholds.items()},
+        "detected_conditions": detected_conditions,
+        "risk_score": round(risk_score, 4),
         "classes": list(raw_probs.keys()),
         "original_image": pil_to_base64(disp_pil, "JPEG", quality=85),
         "segmentation_image": pil_to_base64(seg_pil, "JPEG", quality=85),
         "gradcam_image": pil_to_base64(gradcam_pil, "JPEG", quality=85),
-        "gradcam_plus_image": pil_to_base64(gradcam_plus_pil, "JPEG", quality=85),
-        "lime_image": pil_to_base64(lime_pil, "JPEG", quality=85),
         "inference_time": round(total_time_ms / 1000.0, 3),
         "timings_ms": {
-            "preprocessing": max(t_preprocess, 5),
-            "segmentation": max(t_segment, 10),
-            "classification": max(t_classify, 20),
-            "xai_generation": max(t_xai, 25),
+            "preprocessing": t_preprocess,
+            "segmentation": t_segment,
+            "classification": t_classify,
+            "xai_generation": t_xai,
             "total": total_time_ms
         },
         "model_size_mb": 9.57,

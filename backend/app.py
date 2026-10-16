@@ -18,7 +18,7 @@ from auth import (
     SECRET_KEY,
     ALGORITHM,
 )
-from inference import run_prediction_pipeline, load_model_and_metadata
+from inference import InvalidChestXrayError, run_prediction_pipeline, load_model_and_metadata
 from report_generator import generate_pdf_report
 from gemini_explainer import generate_lung_explanation, chat_about_scan
 
@@ -65,6 +65,10 @@ class ReportExportRequest(BaseModel):
     prediction: str
     confidence: float
     probabilities: dict
+    risk_score: Optional[float] = None
+    risk_scores: Optional[dict] = None
+    thresholds: Optional[dict] = None
+    detected_conditions: Optional[List[str]] = None
     gradcam_image: Optional[str] = None
 
 
@@ -225,6 +229,8 @@ async def predict(
                 print(f"Warning saving scan record: {e}")
 
         return result
+    except InvalidChestXrayError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 
@@ -392,6 +398,10 @@ def export_report(req: ReportExportRequest):
             prediction=req.prediction,
             confidence=req.confidence,
             probabilities=req.probabilities,
+            risk_score=req.risk_score,
+            risk_scores=req.risk_scores,
+            thresholds=req.thresholds,
+            detected_conditions=req.detected_conditions,
             gradcam_base64=req.gradcam_image,
             created_at=datetime.utcnow(),
         )

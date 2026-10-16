@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import ImageUploader from "../components/ImageUploader";
 import { AnalyzingState, ErrorState } from "../components/LoadingState";
@@ -18,7 +18,27 @@ export default function Analyze() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [geminiCardHeight, setGeminiCardHeight] = useState(null);
+  const gradcamColumnRef = useRef(null);
   const { status, stageIndex, result, error, isDemoMode, analyze, reset } = usePrediction();
+
+  useEffect(() => {
+    if (!gradcamColumnRef.current) return;
+
+    const updateHeight = () => {
+      const height = gradcamColumnRef.current?.getBoundingClientRect().height;
+      if (height) {
+        setGeminiCardHeight(Math.round(height));
+      }
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(gradcamColumnRef.current);
+
+    return () => observer.disconnect();
+  }, [result?.gradcam_image]);
 
   const handleExportPdf = async () => {
     if (!result) return;
@@ -29,6 +49,10 @@ export default function Analyze() {
         prediction: result.prediction,
         confidence: result.confidence,
         probabilities: result.probabilities,
+        risk_score: result.risk_score,
+        risk_scores: result.risk_scores,
+        thresholds: result.thresholds,
+        detected_conditions: result.detected_conditions,
         gradcam_image: result.gradcam_image,
       });
     } catch (err) {
@@ -142,26 +166,47 @@ export default function Analyze() {
                 <PredictionCard
                   prediction={result.prediction}
                   confidence={result.confidence}
+                  riskScore={result.risk_score}
+                  detectedConditions={result.detected_conditions}
                   uncertainty={result.uncertainty}
                   calibrationStatus={result.calibration_status}
                 />
-                <ProbabilityChart probabilities={result.probabilities} />
+                <ProbabilityChart
+                  probabilities={result.probabilities}
+                  riskScores={result.risk_scores}
+                  thresholds={result.thresholds}
+                />
               </div>
 
-              {/* Gemini AI Clinical Explanation Section */}
-              <GeminiExplanation
-                prediction={result.prediction}
-                confidence={result.confidence}
-                probabilities={result.probabilities}
-              />
+              <div className="space-y-4">
+                <div>
+                  <p className="font-display text-xl font-semibold mb-1" style={{ color: "var(--color-navy)" }}>
+                    Why did the model make this prediction?
+                  </p>
+                  <p className="text-sm" style={{ color: "var(--color-navy-soft)" }}>
+                    The Grad-CAM heatmap and the AI explanation highlight the regions and reasoning that influenced the prediction.
+                  </p>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] items-stretch">
+                  <div
+                    className="h-full min-h-[420px]"
+                    style={geminiCardHeight ? { height: `${geminiCardHeight}px` } : undefined}
+                  >
+                    <GeminiExplanation
+                      prediction={result.prediction}
+                      confidence={result.confidence}
+                      probabilities={result.probabilities}
+                    />
+                  </div>
+
+                  <div ref={gradcamColumnRef} className="h-full min-h-[420px]">
+                    <ExplainabilityViewer gradcamImage={result.gradcam_image} />
+                  </div>
+                </div>
+              </div>
 
               <SegmentationViewer originalImage={result.original_image} segmentationImage={result.segmentation_image} />
-
-              <ExplainabilityViewer
-                gradcamImage={result.gradcam_image}
-                gradcamPlusImage={result.gradcam_plus_image}
-                limeImage={result.lime_image}
-              />
 
               <PerformanceCard timings={result.timings_ms} totalSeconds={result.inference_time} modelSizeMb={result.model_size_mb} />
             </div>

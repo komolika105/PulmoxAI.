@@ -6,14 +6,43 @@ An AI-assisted chest X-ray analysis tool that scans an image, predicts the likel
 
 React + Vite + Tailwind CSS + Recharts + Lucide + Axios + React Router.
 
-## Getting Started
+## Getting Started (Windows)
 
-```bash
+Prerequisites: Node.js and Python 3.11. TensorFlow is pinned to 2.15.1 for the included Model3 artifact. Use the single backend environment at `backend/venv`.
+
+### 1. Install backend dependencies
+
+From the project root in PowerShell:
+
+```powershell
+py -3.11 -m venv backend\venv
+.\backend\venv\Scripts\python.exe -m pip install --upgrade pip
+.\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+```
+
+If `backend\venv` already exists and works, skip the first command. The Model3 files under `backend\Model3` must remain in place.
+
+### 2. Start the backend
+
+In the same terminal:
+
+```powershell
+Set-Location backend
+.\venv\Scripts\python.exe -m uvicorn app:app --reload
+```
+
+Keep this terminal running. The API health check is available at `http://127.0.0.1:8000/api/health`.
+
+### 3. Start the frontend
+
+Open a second terminal at the project root:
+
+```powershell
 npm install
 npm run dev
 ```
 
-Copy `.env.example` to `.env` and point `VITE_API_BASE_URL` at your FastAPI backend once it exists.
+Open the local URL printed by Vite. For local development, the frontend defaults to `http://127.0.0.1:8000`; a root `.env` is only needed when the backend runs at a different address. Optional Gemini and JWT settings belong in `backend/.env`. Gemini requests use a 10-second timeout by default (the API requires at least 10 seconds); set `GEMINI_TIMEOUT_MS` there to use a longer limit.
 
 ## Pages
 
@@ -26,7 +55,7 @@ Copy `.env.example` to `.env` and point `VITE_API_BASE_URL` at your FastAPI back
 
 ## Backend Contract — Image Analysis
 
-`POST /api/predict` — multipart form field `file` (JPG/PNG chest X-ray) →
+`POST /api/predict` — multipart form field `file` (JPG/JPEG/JPE/PNG chest X-ray) →
 
 ```json
 {

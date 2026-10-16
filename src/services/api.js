@@ -29,7 +29,7 @@ export class BackendUnavailableError extends Error {
 }
 
 export class InvalidImageError extends Error {
-  constructor(message = "This file could not be processed. Upload a JPG or PNG chest X-ray image.") {
+  constructor(message = "This file could not be processed. Upload a JPG, JPE, or PNG chest X-ray image.") {
     super(message);
     this.name = "InvalidImageError";
   }
@@ -82,6 +82,10 @@ export const exportReport = async (reportData) => {
       prediction: reportData.prediction,
       confidence: reportData.confidence,
       probabilities: reportData.probabilities,
+      risk_score: reportData.risk_score,
+      risk_scores: reportData.risk_scores,
+      thresholds: reportData.thresholds,
+      detected_conditions: reportData.detected_conditions,
       gradcam_image: reportData.gradcam_image,
     }, {
       responseType: "blob"

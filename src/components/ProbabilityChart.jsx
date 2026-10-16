@@ -1,9 +1,15 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { classColor, formatPercent } from "../utils/formatters";
 
-export default function ProbabilityChart({ probabilities }) {
+export default function ProbabilityChart({ probabilities, riskScores, thresholds }) {
   const data = Object.entries(probabilities || {})
-    .map(([name, value]) => ({ name, value: value * 100 }))
+    .map(([name, rawProbability]) => ({
+      name,
+      rawProbability,
+      threshold: thresholds?.[name],
+      detected: thresholds?.[name] === undefined ? undefined : rawProbability >= thresholds[name],
+      value: (riskScores?.[name] ?? rawProbability) * 100,
+    }))
     .sort((a, b) => b.value - a.value);
 
   return (
@@ -12,7 +18,7 @@ export default function ProbabilityChart({ probabilities }) {
         Disease Probability Distribution
       </p>
       <p className="text-sm mb-4" style={{ color: "var(--color-navy-soft)" }}>
-        Class-wise probabilities returned by the classifier for this image.
+        Independent disease scores mapped to thresholds; raw probabilities remain visible for review.
       </p>
       <div style={{ width: "100%", height: Math.max(data.length * 52, 160) }}>
         <ResponsiveContainer>
@@ -21,7 +27,13 @@ export default function ProbabilityChart({ probabilities }) {
             <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#45526B" }} axisLine={{ stroke: "var(--color-border)" }} tickLine={false} />
             <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 13, fill: "#0B1730" }} axisLine={false} tickLine={false} />
             <Tooltip
-              formatter={(v) => [`${v.toFixed(1)}%`, "Probability"]}
+              formatter={(value, _name, item) => {
+                const row = item?.payload;
+                const details = row?.threshold === undefined
+                  ? `Raw ${formatPercent(row?.rawProbability)}`
+                  : `Raw ${formatPercent(row.rawProbability)} · threshold ${formatPercent(row.threshold)}`;
+                return [`${Number(value).toFixed(1)}% · ${details}`, "Diagnostic risk"];
+              }}
               contentStyle={{ borderRadius: 10, border: "1px solid var(--color-border)", fontSize: 13 }}
             />
             <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={22}>
@@ -36,7 +48,10 @@ export default function ProbabilityChart({ probabilities }) {
         {data.map((d) => (
           <li key={d.name} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-navy-soft)" }}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: classColor(d.name) }} />
-            {d.name} — {formatPercent(d.value / 100)}
+            <span>
+              {d.name} — Risk {formatPercent(d.value / 100)} · Raw {formatPercent(d.rawProbability)}
+              {d.threshold !== undefined && ` · Threshold ${formatPercent(d.threshold)} · ${d.detected ? "Detected" : "Below threshold"}`}
+            </span>
           </li>
         ))}
       </ul>

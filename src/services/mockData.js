@@ -47,8 +47,6 @@ export function buildMockPrediction(caseIndex = 0) {
     segmentation_image: demoCase.image,
     original_image: demoCase.image,
     gradcam_image: demoCase.image,
-    gradcam_plus_image: demoCase.image,
-    lime_image: demoCase.image,
     inference_time: total / 1000,
     timings_ms: {
       preprocessing,

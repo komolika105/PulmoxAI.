@@ -1,26 +1,12 @@
 import { useState } from "react";
 import { Download, Maximize2 } from "lucide-react";
 
-const METHODS = [
-  {
-    key: "gradcam",
-    title: "Grad-CAM",
-    description: "Highlights image regions that contributed strongly to the predicted class.",
-    legend: "Warmer regions indicate stronger influence on the prediction.",
-  },
-  {
-    key: "gradcam_plus",
-    title: "Focused Grad-CAM",
-    description: "Shows the same Grad-CAM activation with stronger emphasis on higher-response regions.",
-    legend: "Higher activation values are emphasized.",
-  },
-  {
-    key: "lime",
-    title: "Thresholded Grad-CAM",
-    description: "Shows a binary view of the Grad-CAM activation map for the uploaded image.",
-    legend: "Highlighted pixels exceed the activation threshold.",
-  },
-];
+const METHOD = {
+  key: "gradcam",
+  title: "Grad-CAM",
+  description: "Highlights the image regions that contributed most strongly to the prediction.",
+  legend: "Warmer regions indicate stronger influence on the model’s decision.",
+};
 
 function ExplanationCard({ method, image }) {
   const [fullscreen, setFullscreen] = useState(false);
@@ -28,14 +14,17 @@ function ExplanationCard({ method, image }) {
   const download = () => {
     const link = document.createElement("a");
     link.href = image;
-    link.download = `pulmoxai-${method.key}.svg`;
+    link.download = `pulmoxai-${method.key}.jpeg`;
     link.click();
   };
 
   return (
-    <div className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--color-border)" }}>
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="font-display text-base font-semibold" style={{ color: "var(--color-navy)" }}>{method.title}</p>
+    <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "var(--color-border)" }}>
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-border)", backgroundColor: "rgba(16, 24, 40, 0.02)" }}>
+        <div>
+          <p className="font-display text-base font-semibold" style={{ color: "var(--color-navy)" }}>{method.title}</p>
+          <p className="text-xs" style={{ color: "var(--color-navy-soft)" }}>{method.description}</p>
+        </div>
         <div className="flex gap-1">
           <button onClick={() => setFullscreen(true)} aria-label={`View ${method.title} fullscreen`} className="rounded-lg border p-1.5 text-slate-500 hover:bg-slate-50" style={{ borderColor: "var(--color-border)" }}>
             <Maximize2 size={14} />
@@ -45,11 +34,13 @@ function ExplanationCard({ method, image }) {
           </button>
         </div>
       </div>
-      <p className="text-sm mb-3" style={{ color: "var(--color-navy-soft)" }}>{method.description}</p>
-      <div className="aspect-square overflow-hidden rounded-xl border" style={{ borderColor: "var(--color-border)" }}>
-        <img src={image} alt={`${method.title} explanation overlay`} className="h-full w-full object-cover" />
+
+      <div className="p-4 sm:p-5">
+        <div className="aspect-square overflow-hidden rounded-xl border bg-slate-50" style={{ borderColor: "var(--color-border)" }}>
+          <img src={image} alt={`${method.title} explanation overlay`} className="h-full w-full object-cover" />
+        </div>
+        <p className="mt-3 text-xs" style={{ color: "var(--color-navy-soft)" }}>{method.legend}</p>
       </div>
-      <p className="mt-2.5 text-xs" style={{ color: "var(--color-navy-soft)" }}>{method.legend}</p>
 
       {fullscreen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6" onClick={() => setFullscreen(false)} role="dialog" aria-modal="true">
@@ -60,23 +51,14 @@ function ExplanationCard({ method, image }) {
   );
 }
 
-export default function ExplainabilityViewer({ gradcamImage, gradcamPlusImage, limeImage }) {
-  const images = { gradcam: gradcamImage, gradcam_plus: gradcamPlusImage, lime: limeImage };
+export default function ExplainabilityViewer({ gradcamImage }) {
   return (
-    <div>
-      <p className="font-display text-xl font-semibold mb-1" style={{ color: "var(--color-navy)" }}>
-        Why did the model make this prediction?
-      </p>
-      <p className="text-sm mb-5" style={{ color: "var(--color-navy-soft)" }}>
-        Three complementary explanation methods highlight the regions that influenced the classification.
-      </p>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {METHODS.map((method) => (
-          <ExplanationCard key={method.key} method={method} image={images[method.key]} />
-        ))}
+    <div className="h-full">
+      <div className="grid gap-5 h-full">
+        <ExplanationCard method={METHOD} image={gradcamImage} />
       </div>
     </div>
   );
 }
 
-export { METHODS };
+export { METHOD };
